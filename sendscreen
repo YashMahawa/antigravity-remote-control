@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# Directory where the bot script is located
+BOT_DIR="/home/yash/antigravity-telegram-bridge"
+BOT_PID_FILE="/tmp/antigravity_bot.pid"
+
+start_bot() {
+    echo "Starting Standalone Telegram Bridge..."
+    cd "$BOT_DIR" || exit
+    # Use nohup to run in background and detach
+    nohup node standalone_bot.js > /tmp/antigravity_bot.log 2>&1 &
+    echo $! > "$BOT_PID_FILE"
+    echo "Bot started with PID $!. Logs at /tmp/antigravity_bot.log"
+}
+
+stop_bot() {
+    if [ -f "$BOT_PID_FILE" ]; then
+        PID=$(cat "$BOT_PID_FILE")
+        if ps -p "$PID" > /dev/null; then
+            echo "Stopping bot (PID $PID)..."
+            kill "$PID"
+        fi
+        rm "$BOT_PID_FILE"
+    else
+        # Fallback if pid file missing
+        pkill -f "node standalone_bot.js"
+    fi
+}
+
+case "$1" in
+    stop)
+        stop_bot
+        ;;
+    restart)
+        stop_bot
+        sleep 1
+        start_bot
+        ;;
+    status)
+        if [ -f "$BOT_PID_FILE" ] && ps -p $(cat "$BOT_PID_FILE") > /dev/null; then
+            echo "Standalone Telegram Bridge is running."
+        else
+            echo "Standalone Telegram Bridge is NOT running."
+        fi
+        ;;
+    *)
+        # Default action: start if not running
+        if [ -f "$BOT_PID_FILE" ] && ps -p $(cat "$BOT_PID_FILE") > /dev/null; then
+            echo "Standalone Telegram Bridge is already running (PID $(cat "$BOT_PID_FILE"))."
+        else
+            start_bot
+        fi
+        ;;
+esac

@@ -1,0 +1,71 @@
+{
+    "name": "antigravity-remote-control",
+    "displayName": "Antigravity Remote Control",
+    "description": "Telegram Remote Control Bridge for Antigravity (Wayland Native)",
+    "version": "0.1.4",
+    "publisher": "YashMahawar",
+    "license": "MIT",
+    "engines": {
+        "vscode": "^1.70.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/yash/antigravity-telegram-bridge.git"
+    },
+    "icon": "icon.png",
+    "categories": [
+        "Programming Languages",
+        "Keymaps"
+    ],
+    "activationEvents": [
+        "*"
+    ],
+    "main": "./extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "telegram-bridge-explorer",
+                    "title": "Remote Control",
+                    "icon": "icon.svg"
+                }
+            ]
+        },
+        "views": {
+            "telegram-bridge-explorer": [
+                {
+                    "id": "telegramBridgeStatus",
+                    "name": "Control Panel",
+                    "type": "webview",
+                    "icon": "icon.svg"
+                }
+            ]
+        },
+        "commands": [
+            {
+                "command": "telegram-bridge.setBotToken",
+                "title": "Telegram Bridge: Set Bot Token"
+            },
+            {
+                "command": "telegram-bridge.setChatId",
+                "title": "Telegram Bridge: Set Chat ID"
+            },
+            {
+                "command": "telegram-bridge.restartDaemon",
+                "title": "Telegram Bridge: Restart Background Daemon"
+            },
+            {
+                "command": "telegram-bridge.stopDaemon",
+                "title": "Telegram Bridge: Stop Background Daemon"
+            },
+            {
+                "command": "telegram-bridge.status",
+                "title": "Telegram Bridge: Check Daemon Status"
+            },
+            {
+                "command": "telegram-bridge.installDeps",
+                "title": "Telegram Bridge: Install Linux Dependencies"
+            }
+        ]
+    }
+}
