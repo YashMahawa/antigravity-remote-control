@@ -1,0 +1,60 @@
+{
+  "name": "antigravity-telegram-bridge",
+  "displayName": "Antigravity Telegram Bridge",
+  "description": "Bridge for Telegram and Antigravity AI",
+  "version": "0.0.1",
+  "publisher": "yash",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:antigravity-telegram.sendScreen"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "antigravity-telegram.setToken",
+        "title": "Telegram: Set Bot Token"
+      },
+      {
+        "command": "antigravity-telegram.setChatId",
+        "title": "Telegram: Set Chat ID"
+      },
+      {
+        "command": "antigravity-telegram.start",
+        "title": "Telegram: Start Bridge"
+      },
+      {
+        "command": "antigravity-telegram.sendScreen",
+        "title": "Telegram: Send Full Screenshot"
+      }
+    ],
+    "configuration": {
+      "title": "Antigravity Telegram Bridge",
+      "properties": {
+        "antigravityTelegram.botToken": {
+          "type": "string",
+          "default": "",
+          "description": "The Telegram Bot Token from @BotFather"
+        },
+        "antigravityTelegram.chatId": {
+          "type": "string",
+          "default": "",
+          "description": "The Telegram Chat ID to send messages to"
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.61.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "^16.11.7"
+  }
+}
