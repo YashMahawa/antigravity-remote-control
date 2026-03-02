@@ -1,0 +1,16 @@
+.vscode/**
+.vscode-test/**
+out/**
+node_modules/**
+src/**
+.gitignore
+.yarnrc
+.eslintrc.json
+tsconfig.json
+yarn.lock
+package-lock.json
+standalone_bot.js
+sendscreen
+package.bak
+*.png
+!icon.png

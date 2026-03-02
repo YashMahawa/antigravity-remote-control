@@ -2,7 +2,7 @@
     "name": "antigravity-remote-control",
     "displayName": "Antigravity Remote Control",
     "description": "Telegram Remote Control Bridge for Antigravity (Wayland Native)",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "publisher": "YashMahawar",
     "license": "MIT",
     "engines": {
@@ -59,12 +59,20 @@
                 "title": "Telegram Bridge: Stop Background Daemon"
             },
             {
+                "command": "telegram-bridge.toggleDaemon",
+                "title": "Telegram Bridge: Start or Stop Background Daemon"
+            },
+            {
                 "command": "telegram-bridge.status",
                 "title": "Telegram Bridge: Check Daemon Status"
             },
             {
                 "command": "telegram-bridge.installDeps",
                 "title": "Telegram Bridge: Install Linux Dependencies"
+            },
+            {
+                "command": "telegram-bridge.checkSystem",
+                "title": "Telegram Bridge: Diagnose Linux Input Stack"
             }
         ]
     }

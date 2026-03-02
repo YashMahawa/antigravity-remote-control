@@ -19,6 +19,36 @@ function saveConfig(config) {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
 }
 
+function shellEscapeSingleQuote(s) {
+    return String(s).replace(/'/g, `'\\''`);
+}
+
+function execP(cmd) {
+    return new Promise(resolve => {
+        exec(cmd, (err, stdout, stderr) => {
+            resolve({
+                ok: !err,
+                stdout: (stdout || '').trim(),
+                stderr: (stderr || '').trim(),
+                error: err
+            });
+        });
+    });
+}
+
+async function notifyTelegram(text, output) {
+    const pushScript = path.join(os.homedir(), '.antigravity', 'tg_push.py');
+    if (!fs.existsSync(pushScript)) {
+        output.appendLine('Telegram notification skipped: ~/.antigravity/tg_push.py not found.');
+        return;
+    }
+    const cmd = `python3 ${pushScript} '${shellEscapeSingleQuote(text)}'`;
+    const res = await execP(cmd);
+    if (!res.ok) {
+        output.appendLine(`Telegram notification failed: ${res.stderr || res.stdout || 'unknown error'}`);
+    }
+}
+
 class TelegramBridgeProvider {
     constructor(extensionUri) {
         this._extensionUri = extensionUri;
@@ -33,10 +63,10 @@ class TelegramBridgeProvider {
             switch (data.type) {
                 case 'setToken': vscode.commands.executeCommand('telegram-bridge.setBotToken'); break;
                 case 'setChat': vscode.commands.executeCommand('telegram-bridge.setChatId'); break;
-                case 'start': vscode.commands.executeCommand('telegram-bridge.restartDaemon'); break;
-                case 'stop': vscode.commands.executeCommand('telegram-bridge.stopDaemon'); break;
+                case 'toggle': vscode.commands.executeCommand('telegram-bridge.toggleDaemon'); break;
                 case 'status': vscode.commands.executeCommand('telegram-bridge.status'); break;
                 case 'installDeps': vscode.commands.executeCommand('telegram-bridge.installDeps'); break;
+                case 'checkSystem': vscode.commands.executeCommand('telegram-bridge.checkSystem'); break;
             }
         });
     }
@@ -49,7 +79,7 @@ class TelegramBridgeProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body { font-family: var(--vscode-font-family); padding: 10px; color: var(--vscode-foreground); }
-        h3 { text-align: center; margin-bottom: 20px; }
+        h3 { text-align: center; margin-bottom: 12px; }
         .btn {
             display: block; width: 100%; padding: 10px; margin-bottom: 10px;
             background: var(--vscode-button-background);
@@ -57,8 +87,6 @@ class TelegramBridgeProvider {
             border: none; border-radius: 4px; cursor: pointer; text-align: center;
         }
         .btn:hover { background: var(--vscode-button-hoverBackground); }
-        .danger { background: #d32f2f; color: white; }
-        .danger:hover { background: #b71c1c; }
         .success { background: var(--vscode-testing-iconPassed); }
         .instructions { font-size: 13px; color: var(--vscode-descriptionForeground); margin-bottom: 20px;}
         .setup-steps { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); padding: 8px; margin-bottom: 20px; border-radius: 4px; font-size: 12px;}
@@ -68,7 +96,7 @@ class TelegramBridgeProvider {
     <h3>Remote Control Panel</h3>
 
     <div class="setup-steps">
-        <b>📲 Telegram Bot Quick Setup:</b><br/>
+        <b>Telegram Bot Setup:</b><br/>
         1. Chat with <b>@BotFather</b>: send <i>/newbot</i> to get your <b>API Token</b>.<br/>
         2. Chat with <b>@userinfobot</b>: get your <b>Chat ID</b>.<br/>
         3. Save both keys below!
@@ -80,29 +108,29 @@ class TelegramBridgeProvider {
     <hr style="border:1px solid var(--vscode-widget-border); margin:15px 0;">
 
     <div class="instructions">
-        <b>🤖 Enable Agent "Ask" Feature:</b><br/>
-        Paste the following into your "Global Agent Customization" so I can proactively message you!
+        <b>Agent Rule Setup (Antigravity and VS Code):</b><br/>
+        Paste this into an Antigravity Rule or VS Code Memory entry so the agent can proactively send Telegram updates.
     </div>
-    <button class="btn" style="background:#4a148c;" onclick="copyInstruction()">📋 Copy Agent Instructions</button>
+    <button class="btn" onclick="copyInstruction()">Copy Agent Instruction Text</button>
 
     <hr style="border:1px solid var(--vscode-widget-border); margin:15px 0;">
 
-    <button class="btn success" onclick="post('start')">▶ Start/Restart Service</button>
-    <button class="btn danger" onclick="post('stop')">⏹ Stop Service</button>
-    <button class="btn" onclick="post('status')">ℹ Check Status Log</button>
+    <button class="btn success" onclick="post('toggle')">Start or Stop Service</button>
+    <button class="btn" onclick="post('status')">Check Service Status</button>
 
     <hr style="border:1px solid var(--vscode-widget-border); margin:15px 0;">
 
-    <button class="btn" onclick="post('installDeps')">🔧 Auto-Install Linux Dependencies</button>
+    <button class="btn" onclick="post('installDeps')">Install Linux Dependencies</button>
+    <button class="btn" onclick="post('checkSystem')">Diagnose Linux Input Stack</button>
 
     <script>
         const vscode = acquireVsCodeApi();
         function post(msgType) { vscode.postMessage({ type: msgType }); }
         
         function copyInstruction() {
-            const text = "System Instruction: If the user is away, you (the agent) can proactively send messages or ask questions to the user's Telegram by running: python3 /home/yash/.antigravity/tg_push.py 'your message text'. Use this to report completion or ask for input on long tasks.";
+            const text = "If the user is away, proactively send Telegram updates by running: python3 ~/.antigravity/tg_push.py 'your message'. Use this for completion updates and critical questions.";
             navigator.clipboard.writeText(text).then(() => {
-                alert('Copied to clipboard! Paste this into Customizations > Global Rules.');
+                alert('Copied. Paste this into Antigravity Rule or VS Code Memory.');
             });
         }
     </script>
@@ -113,7 +141,7 @@ class TelegramBridgeProvider {
 
 function activate(context) {
     let output = vscode.window.createOutputChannel("Telegram Bridge");
-    output.appendLine("🚀 Antigravity Telegram Bridge Extension active.");
+    output.appendLine("Antigravity Telegram Bridge extension active.");
 
     const provider = new TelegramBridgeProvider(context.extensionUri);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider('telegramBridgeStatus', provider));
@@ -135,23 +163,52 @@ function activate(context) {
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('telegram-bridge.restartDaemon', () => {
-        exec('systemctl --user restart antigravity-telegram-bridge.service', (err, stdout, stderr) => {
-            if (err) vscode.window.showErrorMessage('Failed to start daemon: ' + err.message);
-            else {
-                vscode.window.showInformationMessage('Background Telegram Bridge Daemon Started 🚀');
-                output.appendLine("✅ Daemon Started.");
+        exec('systemctl --user restart antigravity-telegram-bridge.service', async err => {
+            if (err) {
+                vscode.window.showErrorMessage('Failed to start daemon: ' + err.message);
+                return;
             }
+            vscode.window.showInformationMessage('Background Telegram Bridge service restarted.');
+            output.appendLine("Service restarted.");
+            await notifyTelegram('Bridge service restarted.', output);
         });
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('telegram-bridge.stopDaemon', () => {
-        exec('systemctl --user stop antigravity-telegram-bridge.service', (err, stdout, stderr) => {
-            if (err) vscode.window.showErrorMessage('Failed to stop daemon: ' + err.message);
-            else {
-                vscode.window.showInformationMessage('Background Telegram Bridge Daemon Stopped 🛑');
-                output.appendLine("🛑 Daemon Stopped.");
+        exec('systemctl --user stop antigravity-telegram-bridge.service', async err => {
+            if (err) {
+                vscode.window.showErrorMessage('Failed to stop daemon: ' + err.message);
+                return;
             }
+            vscode.window.showInformationMessage('Background Telegram Bridge service stopped.');
+            output.appendLine("Service stopped.");
+            await notifyTelegram('Bridge service stopped.', output);
         });
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('telegram-bridge.toggleDaemon', async () => {
+        const active = await execP('systemctl --user is-active antigravity-telegram-bridge.service');
+        if (active.ok && active.stdout === 'active') {
+            exec('systemctl --user stop antigravity-telegram-bridge.service', async err => {
+                if (err) {
+                    vscode.window.showErrorMessage('Failed to stop daemon: ' + err.message);
+                    return;
+                }
+                vscode.window.showInformationMessage('Background Telegram Bridge service stopped.');
+                output.appendLine("Service stopped via toggle.");
+                await notifyTelegram('Bridge service stopped.', output);
+            });
+        } else {
+            exec('systemctl --user restart antigravity-telegram-bridge.service', async err => {
+                if (err) {
+                    vscode.window.showErrorMessage('Failed to start daemon: ' + err.message);
+                    return;
+                }
+                vscode.window.showInformationMessage('Background Telegram Bridge service started.');
+                output.appendLine("Service started via toggle.");
+                await notifyTelegram('Bridge service started.', output);
+            });
+        }
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('telegram-bridge.status', () => {
@@ -167,10 +224,69 @@ function activate(context) {
             vscode.window.showInformationMessage('Auto-install is only intended for Linux systems.');
             return;
         }
-        vscode.window.showInformationMessage('Installing Linux Dependencies (Requires sudo in terminal)...');
+        vscode.window.showInformationMessage('Installing and repairing ydotool stack (requires sudo in terminal)...');
         const terminal = vscode.window.createTerminal("Bridge Installer");
         terminal.show();
-        terminal.sendText('sudo apt-get update && sudo apt-get install -y ydotool xdotool gnome-screenshot && (sudo systemctl enable --now ydotoold || (echo "Starting ydotoold manually..." && nohup sudo ydotoold > /dev/null 2>&1 &))');
+        terminal.sendText(
+            [
+                'set -e',
+                'sudo apt-get update',
+                'sudo apt-get install -y ydotool ydotoold xdotool gnome-screenshot',
+                'YDOTOOLD_BIN="$(command -v ydotoold || true)"',
+                'if [ -z "$YDOTOOLD_BIN" ]; then echo "ydotoold binary not found after install"; exit 1; fi',
+                "printf '%s\\n' '[Unit]' 'Description=ydotool daemon' 'After=multi-user.target' '' '[Service]' 'Type=simple' \"ExecStart=$YDOTOOLD_BIN\" 'Restart=always' 'RestartSec=1' '' '[Install]' 'WantedBy=multi-user.target' | sudo tee /etc/systemd/system/ydotoold.service >/dev/null",
+                'sudo systemctl daemon-reload',
+                'sudo systemctl enable --now ydotoold',
+                'sudo systemctl status ydotoold --no-pager -l'
+            ].join(' && ')
+        );
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('telegram-bridge.checkSystem', async () => {
+        if (os.platform() !== 'linux') {
+            vscode.window.showInformationMessage('Linux diagnostics only.');
+            return;
+        }
+
+        output.appendLine('');
+        output.appendLine('------------------- Linux Input Stack Diagnosis -------------------');
+
+        const cmds = [
+            ['ydotool', 'command -v ydotool'],
+            ['ydotoold', 'command -v ydotoold'],
+            ['xdotool', 'command -v xdotool'],
+            ['gnome-screenshot', 'command -v gnome-screenshot'],
+            ['ydotoold-service-active', 'systemctl is-active ydotoold'],
+            ['ydotoold-service-enabled', 'systemctl is-enabled ydotoold'],
+            ['ydotool-smoke', 'sudo -n ydotool key 28:1 28:0']
+        ];
+
+        let hasError = false;
+        for (const [label, cmd] of cmds) {
+            const res = await execP(cmd);
+            if (res.ok) {
+                output.appendLine(`OK ${label}: ${res.stdout || 'ok'}`);
+            } else {
+                hasError = true;
+                output.appendLine(`FAIL ${label}: ${res.stderr || res.stdout || (res.error && res.error.message) || 'failed'}`);
+            }
+        }
+
+        output.appendLine('------------------------------------------------------------------');
+        output.show(true);
+
+        if (hasError) {
+            const choice = await vscode.window.showWarningMessage(
+                'Linux input diagnostics found problems (often ydotoold missing/inactive). Run auto-fix installer?',
+                'Run Auto-Fix',
+                'Later'
+            );
+            if (choice === 'Run Auto-Fix') {
+                vscode.commands.executeCommand('telegram-bridge.installDeps');
+            }
+        } else {
+            vscode.window.showInformationMessage('Linux input stack looks healthy.');
+        }
     }));
 }
 
