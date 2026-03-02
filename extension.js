@@ -59,16 +59,32 @@ class TelegramBridgeProvider {
         webviewView.webview.options = { enableScripts: true };
         webviewView.webview.html = this.getHtml();
 
-        webviewView.webview.onDidReceiveMessage(data => {
+        webviewView.webview.onDidReceiveMessage(async data => {
             switch (data.type) {
                 case 'setToken': vscode.commands.executeCommand('telegram-bridge.setBotToken'); break;
                 case 'setChat': vscode.commands.executeCommand('telegram-bridge.setChatId'); break;
-                case 'toggle': vscode.commands.executeCommand('telegram-bridge.toggleDaemon'); break;
+                case 'toggle':
+                    await vscode.commands.executeCommand('telegram-bridge.toggleDaemon');
+                    this.updateStatus();
+                    break;
                 case 'status': vscode.commands.executeCommand('telegram-bridge.status'); break;
                 case 'installDeps': vscode.commands.executeCommand('telegram-bridge.installDeps'); break;
                 case 'checkSystem': vscode.commands.executeCommand('telegram-bridge.checkSystem'); break;
+                case 'refreshStatus': this.updateStatus(); break;
             }
         });
+
+        // Initial status check
+        this.updateStatus();
+        // Poll status every 5 seconds
+        setInterval(() => this.updateStatus(), 5000);
+    }
+
+    async updateStatus() {
+        if (!this._view) return;
+        const res = await execP('systemctl --user is-active antigravity-telegram-bridge.service');
+        const isActive = res.ok && res.stdout === 'active';
+        this._view.webview.postMessage({ type: 'statusUpdate', active: isActive });
     }
 
     getHtml() {
@@ -78,50 +94,105 @@ class TelegramBridgeProvider {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: var(--vscode-font-family); padding: 10px; color: var(--vscode-foreground); }
-        h3 { text-align: center; margin-bottom: 12px; }
+        :root {
+            --accent-color: #007acc;
+            --success-color: #28a745;
+            --danger-color: #d73a49;
+            --border-radius: 2px;
+        }
+        body { 
+            font-family: var(--vscode-font-family); 
+            padding: 16px; 
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-sideBar-background);
+            line-height: 1.4;
+        }
+        h2 { 
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+            color: var(--vscode-descriptionForeground);
+            border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
+            padding-bottom: 4px;
+        }
+        .section { margin-bottom: 24px; }
         .btn {
-            display: block; width: 100%; padding: 10px; margin-bottom: 10px;
+            display: block; width: 100%; padding: 8px 12px; margin-bottom: 8px;
+            background: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            border: 1px solid var(--vscode-button-secondaryBackground);
+            border-radius: var(--border-radius); 
+            cursor: pointer; text-align: center;
+            font-size: 12px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.8; }
+        .btn-primary {
             background: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
-            border: none; border-radius: 4px; cursor: pointer; text-align: center;
+            border: 1px solid var(--vscode-button-background);
         }
-        .btn:hover { background: var(--vscode-button-hoverBackground); }
-        .success { background: var(--vscode-testing-iconPassed); }
-        .instructions { font-size: 13px; color: var(--vscode-descriptionForeground); margin-bottom: 20px;}
-        .setup-steps { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); padding: 8px; margin-bottom: 20px; border-radius: 4px; font-size: 12px;}
+        .btn-toggle {
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn-start {
+            background: var(--success-color) !important;
+            color: white !important;
+            border-color: var(--success-color) !important;
+        }
+        .btn-stop {
+            background: var(--danger-color) !important;
+            color: white !important;
+            border-color: var(--danger-color) !important;
+        }
+        .description { 
+            font-size: 11px; 
+            color: var(--vscode-descriptionForeground); 
+            margin-bottom: 12px;
+        }
+        .card { 
+            background: var(--vscode-sideBar-dropBackground); 
+            border: 1px solid var(--vscode-panel-border); 
+            padding: 12px; 
+            margin-bottom: 20px; 
+            border-radius: var(--border-radius); 
+            font-size: 12px;
+        }
+        hr { border: 0; border-top: 1px solid var(--vscode-sideBarSectionHeader-border); margin: 20px 0; }
+        b { color: var(--vscode-foreground); }
     </style>
 </head>
 <body>
-    <h3>Remote Control Panel</h3>
-
-    <div class="setup-steps">
-        <b>Telegram Bot Setup:</b><br/>
-        1. Chat with <b>@BotFather</b>: send <i>/newbot</i> to get your <b>API Token</b>.<br/>
-        2. Chat with <b>@userinfobot</b>: get your <b>Chat ID</b>.<br/>
-        3. Save both keys below!
+    <div class="section">
+        <h2>Authentication</h2>
+        <div class="description">Configuration for Telegram Bot connection.</div>
+        <button class="btn btn-primary" onclick="post('setToken')">Set Bot Token</button>
+        <button class="btn btn-primary" onclick="post('setChat')">Set Chat ID</button>
     </div>
 
-    <button class="btn" onclick="post('setToken')">Keys: Set Bot Token</button>
-    <button class="btn" onclick="post('setChat')">Keys: Set Chat ID</button>
-    
-    <hr style="border:1px solid var(--vscode-widget-border); margin:15px 0;">
-
-    <div class="instructions">
-        <b>Agent Rule Setup (Antigravity and VS Code):</b><br/>
-        Paste this into an Antigravity Rule or VS Code Memory entry so the agent can proactively send Telegram updates.
+    <div class="section">
+        <h2>Agent Integration</h2>
+        <div class="description">Copy this instruction into your Agent Customization settings to enable proactive notifications.</div>
+        <button class="btn" onclick="copyInstruction()">Copy Instruction Text</button>
     </div>
-    <button class="btn" onclick="copyInstruction()">Copy Agent Instruction Text</button>
 
-    <hr style="border:1px solid var(--vscode-widget-border); margin:15px 0;">
+    <div class="section">
+        <h2>Service Control</h2>
+        <button id="toggleBtn" class="btn btn-toggle btn-start" onclick="post('toggle')">Start Service</button>
+        <button class="btn" onclick="post('status')">Show Service Logs</button>
+    </div>
 
-    <button class="btn success" onclick="post('toggle')">Start or Stop Service</button>
-    <button class="btn" onclick="post('status')">Check Service Status</button>
+    <hr>
 
-    <hr style="border:1px solid var(--vscode-widget-border); margin:15px 0;">
-
-    <button class="btn" onclick="post('installDeps')">Install Linux Dependencies</button>
-    <button class="btn" onclick="post('checkSystem')">Diagnose Linux Input Stack</button>
+    <div class="section">
+        <h2>System Maintenance</h2>
+        <button class="btn" onclick="post('installDeps')">Install Dependencies</button>
+        <button class="btn" onclick="post('checkSystem')">Run System Diagnosis</button>
+    </div>
 
     <script>
         const vscode = acquireVsCodeApi();
@@ -129,10 +200,25 @@ class TelegramBridgeProvider {
         
         function copyInstruction() {
             const text = "If the user is away, proactively send Telegram updates by running: python3 ~/.antigravity/tg_push.py 'your message'. Use this for completion updates and critical questions.";
-            navigator.clipboard.writeText(text).then(() => {
-                alert('Copied. Paste this into Antigravity Rule or VS Code Memory.');
-            });
+            navigator.clipboard.writeText(text);
         }
+
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.type === 'statusUpdate') {
+                const btn = document.getElementById('toggleBtn');
+                if (message.active) {
+                    btn.textContent = 'Stop Service';
+                    btn.className = 'btn btn-toggle btn-stop';
+                } else {
+                    btn.textContent = 'Start Service';
+                    btn.className = 'btn btn-toggle btn-start';
+                }
+            }
+        });
+
+        // Request update on load
+        post('refreshStatus');
     </script>
 </body>
 </html>`;
@@ -171,6 +257,7 @@ function activate(context) {
             vscode.window.showInformationMessage('Background Telegram Bridge service restarted.');
             output.appendLine("Service restarted.");
             await notifyTelegram('Bridge service restarted.', output);
+            provider.updateStatus();
         });
     }));
 
@@ -183,6 +270,7 @@ function activate(context) {
             vscode.window.showInformationMessage('Background Telegram Bridge service stopped.');
             output.appendLine("Service stopped.");
             await notifyTelegram('Bridge service stopped.', output);
+            provider.updateStatus();
         });
     }));
 
@@ -197,6 +285,7 @@ function activate(context) {
                 vscode.window.showInformationMessage('Background Telegram Bridge service stopped.');
                 output.appendLine("Service stopped via toggle.");
                 await notifyTelegram('Bridge service stopped.', output);
+                provider.updateStatus();
             });
         } else {
             exec('systemctl --user restart antigravity-telegram-bridge.service', async err => {
@@ -207,13 +296,14 @@ function activate(context) {
                 vscode.window.showInformationMessage('Background Telegram Bridge service started.');
                 output.appendLine("Service started via toggle.");
                 await notifyTelegram('Bridge service started.', output);
+                provider.updateStatus();
             });
         }
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('telegram-bridge.status', () => {
         exec('systemctl --user status antigravity-telegram-bridge.service', (err, stdout, stderr) => {
-            output.appendLine("\\n------------------- Background Daemon Status -------------------");
+            output.appendLine("\n------------------- Background Daemon Status -------------------");
             output.appendLine(stdout || stderr || "No output or service not found.");
             output.show(true);
         });
