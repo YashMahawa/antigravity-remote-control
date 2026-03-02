@@ -353,6 +353,23 @@ function activate(context) {
     let output = vscode.window.createOutputChannel("Telegram Bridge");
     output.appendLine("Antigravity Remote Control extension active.");
 
+    try {
+        const agDir = path.join(os.homedir(), '.antigravity');
+        if (!fs.existsSync(agDir)) fs.mkdirSync(agDir, { recursive: true });
+
+        const bundledDaemon = path.join(context.extensionPath, 'daemon', 'tg_system_daemon.py');
+        const destructDaemon = path.join(agDir, 'tg_system_daemon.py');
+        if (fs.existsSync(bundledDaemon)) fs.copyFileSync(bundledDaemon, destructDaemon);
+
+        const bundledPush = path.join(context.extensionPath, 'daemon', 'tg_push.py');
+        const destructPush = path.join(agDir, 'tg_push.py');
+        if (fs.existsSync(bundledPush)) fs.copyFileSync(bundledPush, destructPush);
+
+        output.appendLine("Bundled Python daemon scripts synced.");
+    } catch (err) {
+        output.appendLine("Failed to sync bundled python scripts: " + err.message);
+    }
+
     const provider = new TelegramBridgeProvider(context.extensionUri, output);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider('telegramBridgeStatus', provider));
 
