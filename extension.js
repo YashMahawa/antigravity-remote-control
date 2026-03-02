@@ -69,7 +69,10 @@ async function isServiceActive() {
         return res.ok && res.stdout === 'active';
     } else if (plat === 'darwin') {
         const res = await execP(`launchctl list 2>/dev/null | grep ${PLIST_LABEL}`);
-        return res.ok && res.stdout.length > 0;
+        if (!res.ok || !res.stdout) return false;
+        // Output format: "PID   Status  Label"
+        const parts = res.stdout.trim().split(/\s+/);
+        return parts.length > 0 && parts[0] !== '-';
     } else {
         // Windows: check for running python process with daemon script
         const res = await execP('tasklist /FI "IMAGENAME eq python.exe" /FO CSV /NH');
@@ -110,7 +113,24 @@ async function getServiceStatus(output) {
     if (plat === 'linux') {
         return await execP(`systemctl --user status ${SERVICE_NAME}.service`);
     } else if (plat === 'darwin') {
-        return await execP(`launchctl list ${PLIST_LABEL} 2>&1`);
+        const logPath = path.join(os.homedir(), '.antigravity', 'daemon.log');
+        let logContent = 'No recent logs.';
+        if (fs.existsSync(logPath)) {
+            try {
+                const stats = fs.statSync(logPath);
+                const size = Math.min(stats.size, 1500);
+                const fd = fs.openSync(logPath, 'r');
+                const buffer = Buffer.alloc(size);
+                fs.readSync(fd, buffer, 0, size, stats.size - size);
+                fs.closeSync(fd);
+                logContent = buffer.toString('utf-8').trim();
+            } catch (e) {
+                logContent = "Failed to read logs: " + e.message;
+            }
+        }
+        const res = await execP(`launchctl list ${PLIST_LABEL} 2>&1`);
+        const isActive = res.stdout.includes('"PID" =') ? 'RUNNING (Active)' : 'STOPPED (Inactive)';
+        return { ok: true, stdout: `macOS Background Service is: ${isActive}\n\n--- Recent Daemon Logs (~/.antigravity/daemon.log) ---\n${logContent || 'Empty log file'}` };
     } else {
         return await execP('tasklist /FI "IMAGENAME eq python.exe" /FO TABLE /NH');
     }

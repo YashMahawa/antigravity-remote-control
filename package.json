@@ -2,7 +2,7 @@
     "name": "antigravity-remote-control",
     "displayName": "Antigravity Remote Control",
     "description": "Telegram Remote Control Bridge for Antigravity (Wayland Native)",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "publisher": "YashMahawar",
     "license": "MIT",
     "engines": {
