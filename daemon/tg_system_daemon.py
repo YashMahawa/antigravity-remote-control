@@ -210,38 +210,44 @@ def type_text(text):
         return False, "Empty text"
 
     if SYS_PLATFORM == "darwin":
-        # macOS: Use osascript to type via System Events
-        # First clear existing field content
+        # macOS: Use clipboard via pbcopy to avoid escaping issues
         run_sys('osascript -e \'tell application "System Events" to keystroke "a" using command down\'')
         run_sys('osascript -e \'tell application "System Events" to key code 51\'')  # Delete
         time.sleep(0.1)
-        # Type the text using clipboard to avoid escaping issues
-        escaped = text.replace("\\", "\\\\").replace('"', '\\"')
-        script = f'''
-        set the clipboard to "{escaped}"
-        tell application "System Events"
-            keystroke "v" using command down
-        end tell
-        '''
-        run_cmd(["osascript", "-e", script])
-        return True, "macos-clipboard-paste"
+        
+        try:
+            # Safely set clipboard
+            process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+            process.communicate(input=text.encode('utf-8'))
+            
+            script = '''
+            tell application "System Events"
+                keystroke "v" using command down
+            end tell
+            '''
+            run_cmd(["osascript", "-e", script])
+            return True, "macos-clipboard-paste"
+        except Exception as e:
+            return False, f"pbcopy failed: {e}"
 
     elif SYS_PLATFORM == "windows":
-        # Windows: Use PowerShell clip + SendKeys paste
-        # Clipboard method avoids all special character escaping issues
-        ps_clip = f'Set-Clipboard -Value "{text.replace(chr(34), "`" + chr(34))}"'
-        run_cmd(["powershell", "-c", ps_clip])
-        time.sleep(0.05)
-        ps_paste = (
-            "Add-Type -AssemblyName System.Windows.Forms; "
-            "[System.Windows.Forms.SendKeys]::SendWait('^a'); "
-            "Start-Sleep -Milliseconds 50; "
-            "[System.Windows.Forms.SendKeys]::SendWait('{BACKSPACE}'); "
-            "Start-Sleep -Milliseconds 50; "
-            "[System.Windows.Forms.SendKeys]::SendWait('^v'); "
-        )
-        run_cmd(["powershell", "-c", ps_paste])
-        return True, "windows-clipboard-paste"
+        # Windows: Use PowerShell clipboard injection
+        try:
+            process = subprocess.Popen(['powershell', '-command', 'Set-Clipboard'], stdin=subprocess.PIPE)
+            process.communicate(input=text.encode('utf-8'))
+            time.sleep(0.05)
+            ps_paste = (
+                "Add-Type -AssemblyName System.Windows.Forms; "
+                "[System.Windows.Forms.SendKeys]::SendWait('^a'); "
+                "Start-Sleep -Milliseconds 50; "
+                "[System.Windows.Forms.SendKeys]::SendWait('{BACKSPACE}'); "
+                "Start-Sleep -Milliseconds 50; "
+                "[System.Windows.Forms.SendKeys]::SendWait('^v'); "
+            )
+            run_cmd(["powershell", "-c", ps_paste])
+            return True, "windows-clipboard-paste"
+        except Exception as e:
+            return False, f"powershell clipboard failed: {e}"
 
     else:
         # Linux: Clear field first
@@ -251,11 +257,12 @@ def type_text(text):
 
         # On Wayland, prefer ydotool for typing
         if IS_WAYLAND and has_cmd("ydotool"):
+            # ydotool type is safer with environment variables or temp files but text string is basic implementation
             ok, out = run_cmd(["sudo", "-n", "ydotool", "type", "--key-delay", "6", text])
             if ok:
                 return True, "linux-ydotool"
 
-        # Fallback to xdotool (works on X11 and some Wayland with XWayland)
+        # Fallback to xdotool
         if has_cmd("xdotool"):
             # Use xdotool type with --clearmodifiers for reliability
             safe_text = text.replace("'", "'\\''")
@@ -276,22 +283,50 @@ def click_coords(x, y):
             run_sys(f"cliclick c:{x},{y}")
             return True, "macos-cliclick"
         else:
-            # Pure AppleScript fallback using Python CGEvent
-            script = f'''
-            do shell script "python3 -c \\"
-import Quartz
-point = Quartz.CGPointMake({x}, {y})
-mouseDown = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseDown, point, Quartz.kCGMouseButtonLeft)
-mouseUp = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventLeftMouseUp, point, Quartz.kCGMouseButtonLeft)
-Quartz.CGEventPost(Quartz.kCGHIDEventTap, mouseDown)
-Quartz.CGEventPost(Quartz.kCGHIDEventTap, mouseUp)
-\\""
-            '''
-            ok, out = run_cmd(["osascript", "-e", script])
+            # 100% Native Pure Python ctypes fallback (no PyObjC required, universally supported)
+            script = f"""
+import ctypes
+import time
+import sys
+try:
+    cg = ctypes.cdll.LoadLibrary('/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics')
+    cf = ctypes.cdll.LoadLibrary('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+    
+    class CGPoint(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double)]
+        
+    point = CGPoint({x}, {y})
+    
+    cg.CGEventCreateMouseEvent.restype = ctypes.c_void_p
+    cg.CGEventCreateMouseEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint32, CGPoint, ctypes.c_uint32]
+    cg.CGEventPost.restype = None
+    cg.CGEventPost.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+    cf.CFRelease.restype = None
+    cf.CFRelease.argtypes = [ctypes.c_void_p]
+    
+    # 5 = MouseMoved, 1 = LeftMouseDown, 2 = LeftMouseUp, 0 = LeftMouseButton, 0 = kCGHIDEventTap
+    mouse_move = cg.CGEventCreateMouseEvent(None, 5, point, 0)
+    cg.CGEventPost(0, mouse_move)
+    time.sleep(0.05)
+    
+    mouse_down = cg.CGEventCreateMouseEvent(None, 1, point, 0)
+    mouse_up = cg.CGEventCreateMouseEvent(None, 2, point, 0)
+    cg.CGEventPost(0, mouse_down)
+    time.sleep(0.05)
+    cg.CGEventPost(0, mouse_up)
+    
+    cf.CFRelease(mouse_move)
+    cf.CFRelease(mouse_down)
+    cf.CFRelease(mouse_up)
+    sys.exit(0)
+except Exception as e:
+    print(e)
+    sys.exit(1)
+"""
+            ok, out = run_cmd(["python3", "-c", script])
             if ok:
-                return True, "macos-quartz-cgevent"
-            # Final fallback: try with cliclick installation hint
-            return False, "macOS mouse click requires 'brew install cliclick' or Accessibility permissions for Quartz"
+                return True, "macos-quartz-ctypes"
+            return False, f"macOS ctypes fallback failed: {out}"
 
     elif SYS_PLATFORM == "windows":
         ps = f"""
