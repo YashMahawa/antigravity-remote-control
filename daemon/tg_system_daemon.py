@@ -434,7 +434,10 @@ def capture_screenshot():
             success = result.returncode == 0
 
     if success and os.path.exists(tmp_path):
-        send_photo(tmp_path, f"Screenshot ({SYS_PLATFORM})")
+        caption = f"Screenshot ({SYS_PLATFORM})"
+        if SYS_PLATFORM == "darwin":
+            caption += "\n⚠️ Note: If this image only shows your desktop wallpaper, you must go to Apple System Settings -> Privacy & Security -> Screen Recording and enable Permissions for VS Code / Python / Terminal."
+        send_photo(tmp_path, caption)
     else:
         send_message(f"Screenshot failed on {SYS_PLATFORM}. Ensure screenshot tools are available.")
 
@@ -592,17 +595,16 @@ def main():
                         send_message(f"[ERROR] Keyboard failure: {backend}")
                         continue
 
-                    time.sleep(0.15)
+                    time.sleep(0.3)  # Wait for UI to process paste
 
-                    # 3. Click Send button
-                    click_ok, click_be = click_coords(target_cx, target_cy)
-                    if click_ok:
-                        st = "Ongoing" if is_session_started else "New"
-                        send_message(f"[SENT] ({st}) via {click_be}")
+                    # 3. Press Enter to Send
+                    # Instead of trying to click a Send button that moves based on text length,
+                    # we natively press Enter, which is the universal way to submit chat prompts.
+                    submit_ok, submit_be = submit_fallback_keys()
+                    if submit_ok:
+                        send_message(f"[SENT] via {submit_be}")
                     else:
-                        # Fallback: press Enter key
-                        submit_fallback_keys()
-                        send_message("[SENT] via Enter key fallback")
+                        send_message("[ERROR] Failed to press Enter key.")
 
                     is_session_started = True
         time.sleep(1)
