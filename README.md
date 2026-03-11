@@ -1,47 +1,52 @@
-# Antigravity Telegram Bridge
+# Antigravity Remote Control (v0.2.5)
 
-Welcome to **Telegram Bridge**. This extension provides a robust, native, multi-platform bridge to remotely control your IDE AI assistant from Telegram on your phone.
+**Telegram-to-IDE Bridge with Native CDP Integration**
 
-Originally built to conquer the intense security restrictions of **GNOME Wayland on Linux**, it now completely bypasses standard sandboxing to cleanly inject keystrokes exactly like a real physical keyboard!
+Antigravity Remote Control allows you to control your IDE's AI assistant directly from your smartphone via Telegram. Unlike older versions that relied on brittle UI automation and coordinate-based clicking, **v0.2.5** uses the **Chrome DevTools Protocol (CDP)** to interact natively with the IDE's internal state.
 
+---
 
-## Why this matters (Wayland challenge)
-Modern display servers like Linux Wayland strictly prohibit applications from simulating keystrokes or moving the mouse via scripts (to prevent malware). Standard tools completely fail or trigger buggy behavior when simulating IDE shortcuts. 
+## 🚀 Key Features
 
-**This extension solves it** by dynamically detecting your OS environment and falling back to true hardware virtualization:
-- **Linux (Wayland)**: Seamlessly leverages `/dev/uinput` via `ydotool` to guarantee cross-app native clicks, paired with `xdotool` for typing. 
-- **macOS**: Harnesses native Apple `osascript` application system events.
-- **Windows**: Injects commands deep via native .NET `System.Windows.Forms.SendKeys` assemblies.
+### 1. Native Chat Interaction
+Messages sent from your phone are injected directly into the Antigravity chat engine. This works regardless of whether the window is focused or what OS you are running.
 
-Now your remote background prompts will **never freeze your IDE**.
+### 2. Full Two-Way Sync
+The bot doesn't just send prompts anymore—it **listens** for the AI's response. Once the AI finishes generating, the complete response is forwarded back to your Telegram chat (with automatic chunking for long messages).
 
-## Features
-- **Direct Real-Time Chat**: Use your phone to send prompts directly to your workstation's AI without needing IDE focus!  
-  *(Note: You can simply text normal sentences, no need to prefix with `/chat`!)*
-- **Force Stop**: Send `/stop` to instantly kill run-away loops and generate cycles.
-- **Remote Screenshots**: Ask the bot for `/screenshot` to see what your IDE is currently looking at!
-- **Control panel inside the IDE**: View setup instructions and toggle the daemon from the Activity Bar.
+### 3. Image & File Upload
+Send a photo or document from your phone to the bot, and it will be automatically uploaded into the IDE's context. Perfect for taking a photo of a whiteboard or a physical screen and asking the AI to "analyze this code."
 
-## Setup Instructions
-1. Click the Telegram Bridge icon in your VS Code Activity Bar.
-2. Click **Set Bot Token** and provide your Bot API key from `@BotFather`.
-3. Click **Set Chat ID** and provide your personal Telegram Chat ID.
-4. If on Linux/Wayland, hit **Calibrate Click Targets** to set exactly where the background daemon should click.
-5. Use **Start or Stop Service** in the control panel to manage the daemon.
-6. For agent proactive messaging, paste the provided instruction text into an **Antigravity Rule** or **VS Code Memory** entry.
+### 4. System Commands
+- `/status`: Check if the bridge and CDP connection are healthy.
+- `/new`: Reset and start a fresh chat session.
+- `/stop`: Instantly interrupt a running generation.
+- `/screen`: Get a real-time screenshot of your workstation.
 
-*Dependencies Note*: On Linux, you should have `ydotoold` (for Wayland clicks), `xdotool` (for Wayland text typing), and `gnome-screenshot` (for image capturing) installed on your system.
+---
 
-Compatibility: works in Antigravity and standard VS Code environments.
+## 🛠️ Requirements & Setup
 
-## Troubleshooting (Linux Wayland)
-If users report:
-- `ydotool: notice: ydotoold backend unavailable`
-- `Unit ydotoold.service could not be found`
-- `failed to open uinput device`
+1. **Antigravity IDE**: Must be running.
+2. **Remote Debugging**: Launch Antigravity with the `--remote-debugging-port=7800` flag.
+3. **Configuration**:
+   - Open the **Remote Control** panel in the Activity Bar.
+   - Set your **Bot Token** (from [@BotFather](https://t.me/botfather)).
+   - Set your **Chat ID** (ensure only you can control your IDE).
+4. **Start Service**: Click **Start Bridge** in the sidebar.
 
-Use the extension commands:
-1. `Telegram Bridge: Diagnose Linux Input Stack`
-2. `Telegram Bridge: Install Linux Dependencies`
+---
 
-The installer now explicitly installs `ydotoold`, creates `/etc/systemd/system/ydotoold.service`, runs `daemon-reload`, and enables/starts the service.
+## 💻 Tech Stack (v0.2.5)
+- **Backend**: Node.js Standalone Service.
+- **Library**: `telegraf` (Modern, secure Telegram framework).
+- **Communication**: Chrome DevTools Protocol (CDP) via WebSockets.
+- **Vulnerabilities**: 0 (Audited and replaced deprecated dependencies).
+
+## 🌍 Platform Support
+- **Linux**: Fully compatible with Wayland and X11 (native injection).
+- **macOS**: Native support.
+- **Windows**: Native support.
+
+---
+*Developed by Yash Mahawar*
