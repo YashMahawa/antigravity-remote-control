@@ -1,8 +1,8 @@
 {
     "name": "antigravity-remote-control",
     "displayName": "Antigravity Remote Control",
-    "description": "Telegram Remote Control Bridge for Antigravity (Wayland Native)",
-    "version": "0.2.4",
+    "description": "Telegram Remote Control Bridge for Antigravity (CDP Native + Image Support)",
+    "version": "0.2.5",
     "publisher": "YashMahawar",
     "license": "MIT",
     "engines": {
@@ -22,25 +22,6 @@
     ],
     "main": "./extension.js",
     "contributes": {
-        "viewsContainers": {
-            "activitybar": [
-                {
-                    "id": "telegram-bridge-explorer",
-                    "title": "Remote Control",
-                    "icon": "icon.svg"
-                }
-            ]
-        },
-        "views": {
-            "telegram-bridge-explorer": [
-                {
-                    "id": "telegramBridgeStatus",
-                    "name": "Control Panel",
-                    "type": "webview",
-                    "icon": "icon.svg"
-                }
-            ]
-        },
         "commands": [
             {
                 "command": "telegram-bridge.setBotToken",
@@ -49,31 +30,31 @@
             {
                 "command": "telegram-bridge.setChatId",
                 "title": "Telegram Bridge: Set Chat ID"
-            },
-            {
-                "command": "telegram-bridge.restartDaemon",
-                "title": "Telegram Bridge: Restart Background Daemon"
-            },
-            {
-                "command": "telegram-bridge.stopDaemon",
-                "title": "Telegram Bridge: Stop Background Daemon"
-            },
-            {
-                "command": "telegram-bridge.toggleDaemon",
-                "title": "Telegram Bridge: Start or Stop Background Daemon"
-            },
-            {
-                "command": "telegram-bridge.status",
-                "title": "Telegram Bridge: Check Daemon Status"
-            },
-            {
-                "command": "telegram-bridge.installDeps",
-                "title": "Telegram Bridge: Install Linux Dependencies"
-            },
-            {
-                "command": "telegram-bridge.checkSystem",
-                "title": "Telegram Bridge: Diagnose Linux Input Stack"
             }
-        ]
+        ],
+        "configuration": {
+            "title": "Antigravity Telegram Bridge",
+            "properties": {
+                "antigravityTelegram.botToken": {
+                    "type": "string",
+                    "default": "",
+                    "description": "The Telegram Bot Token from @BotFather"
+                },
+                "antigravityTelegram.chatId": {
+                    "type": "string",
+                    "default": "",
+                    "description": "The Telegram Chat ID to send messages to"
+                }
+            }
+        }
+    },
+    "dependencies": {
+        "dotenv": "^17.3.1",
+        "telegraf": "^4.16.3",
+        "ws": "^8.19.0"
+    },
+    "devDependencies": {
+        "@types/node": "^16.11.7",
+        "@types/vscode": "^1.70.0"
     }
 }
